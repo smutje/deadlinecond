@@ -1,7 +1,6 @@
 package deadlinecond
 
 import (
-  "errors"
   "sync"
   "time"
 )
