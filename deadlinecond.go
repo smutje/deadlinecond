@@ -8,7 +8,7 @@ import (
 type Cond struct {
   sync.Cond
 
-  waitTag   int
+  waitTag   int32
   timer *time.Timer
 }
 
@@ -27,8 +27,6 @@ func (d *Cond) timeout(){
 }
 
 func (d *Cond) SetDeadline(t time.Time) error {
-  d.Cond.L.Lock()
-  defer d.Cond.L.Unlock()
   if t == (time.Time{}) {
     if d.timer == nil {
       return nil

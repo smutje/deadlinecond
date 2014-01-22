@@ -2,33 +2,10 @@ package deadlinecond
 
 import (
   "testing"
-  "net"
   "time"
+  "sync"
+  "math"
 )
-
-func TestNetBehavior(t *testing.T){
-  tick := make(chan bool)
-  l,err := net.Listen("tcp",":1337")
-  defer l.Close()
-  go func(l net.Listener, ty chan bool){
-    s,_ := l.Accept()
-    <-ty
-    s.Close()
-  }(l, tick)
-  s,_ := net.Dial("tcp",":1337")
-  go func(){
-    time.Sleep(20 * time.Millisecond)
-    s.SetDeadline(time.Now().Add(10 * time.Millisecond))
-    time.Sleep(20 * time.Millisecond)
-    tick <- true
-  }()
-  time.Sleep(1 * time.Second)
-  buf := make([]byte,1)
-  n,_ := s.Read(buf)
-  t.Logf("%d - %#v",n, err)
-  s.Close()
-}
-
 
 func TestCond(t *testing.T){
   cond := NewCond(nil)
@@ -37,11 +14,13 @@ func TestCond(t *testing.T){
     cond.Signal()
   }()
   n := time.Now()
-  cond.SetDeadline(n.Add(20 * time.Millisecond))
   cond.L.Lock()
+  cond.SetDeadline(n.Add(20 * time.Millisecond))
   cond.Wait()
   e := time.Now().Sub(n)
-  t.Logf("%#v",e)
+  if e > 11 * time.Millisecond {
+    t.Fatal("Waited too long")
+  }
 }
 
 func TestCondWait2(t *testing.T){
@@ -51,8 +30,8 @@ func TestCondWait2(t *testing.T){
     cond.Signal()
   }()
   n := time.Now()
-  cond.SetDeadline(n.Add(20 * time.Millisecond))
   cond.L.Lock()
+  cond.SetDeadline(n.Add(20 * time.Millisecond))
   w := cond.Wait()
   if w {
     t.Fatal("Timedout althought it shouldn't")
@@ -66,11 +45,27 @@ func TestCondWait2Timeout(t *testing.T){
     cond.Signal()
   }()
   n := time.Now()
-  cond.SetDeadline(n.Add(10 * time.Millisecond))
   cond.L.Lock()
+  cond.SetDeadline(n.Add(10 * time.Millisecond))
   w := cond.Wait()
   if !w {
     t.Fatal("Not timedout althought it should")
   }
 }
+
+func TestCondEdgeCase(t *testing.T){
+  cond := &Cond{Cond: *sync.NewCond(&sync.Mutex{}), waitTag: math.MaxInt32 }
+  go func(){
+    time.Sleep(20 * time.Millisecond)
+    cond.Signal()
+  }()
+  n := time.Now()
+  cond.L.Lock()
+  cond.SetDeadline(n.Add(10 * time.Millisecond))
+  w := cond.Wait()
+  if !w {
+    t.Fatal("Not timedout althought it should")
+  }
+}
+
 
